@@ -49,79 +49,61 @@ export default function MapContent() {
   const [totalSupport, setTotalSupport] = useState(0);
   const supabase = createClient();
 
-  useEffect(() => {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setCenter([position.coords.latitude, position.coords.longitude]);
-          setIsLoading(false);
-        },
-        (error) => {
-          console.error("無法取得位置:", error);
-          let errorMsg =
-            "無法取得您的位置，請檢查是否允許定位權限或稍後重試。 Can't get your location, please check if you have allowed location permissions or try again later.";
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              errorMsg =
-                "您拒絕了定位權限，請在瀏覽器設定中啟用定位功能。 You denied the location permission, please enable location services in your browser settings.";
-              break;
-            case error.POSITION_UNAVAILABLE:
-              errorMsg =
-                "定位服務不可用，請確認您的設備是否支援定位或檢查網路連線。 Location services are unavailable, please check if your device supports location or check your network connection.";
-              break;
-            case error.TIMEOUT:
-              errorMsg =
-                "取得位置超時，請稍後重試。 Location request timed out, please try again later.";
-              break;
-          }
-          setErrorMessage(errorMsg);
-          setIsLoading(false);
-        },
-        { timeout: 10000, enableHighAccuracy: true } // Added options for timeout and accuracy
-      );
-    } else {
-      console.log("瀏覽器不支援地理位置");
-      setErrorMessage("您的瀏覽器不支援地理位置功能，請使用支援的瀏覽器。");
+  const handleGeolocationError = useCallback(
+    (error: GeolocationPositionError) => {
+      console.error("無法取得位置:", error);
+      let errorMsg = "無法取得您的位置，請檢查是否允許定位權限或稍後重試。";
+
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          errorMsg = "您拒絕了定位權限，請在瀏覽器設定中啟用定位功能。";
+          break;
+        case error.POSITION_UNAVAILABLE:
+          errorMsg =
+            "定位服務不可用，請確認您的設備是否支援定位或檢查網路連線。";
+          break;
+        case error.TIMEOUT:
+          errorMsg = "取得位置超時，請稍後重試。";
+          break;
+      }
+
+      setErrorMessage(errorMsg);
       setIsLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
+
+  const handleGeolocationSuccess = useCallback(
+    (position: GeolocationPosition) => {
+      setCenter([position.coords.latitude, position.coords.longitude]);
+      setIsLoading(false);
+    },
+    []
+  );
 
   const fetchMessages = useCallback(async () => {
     const { data, error } = await supabase
       .from("messages")
       .select("*")
       .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("讀取留言失敗:", error);
+      return;
+    }
+
     if (data) {
       setMessages(data);
       setTotalSupport(data.length);
-    } else {
-      console.error("讀取留言失敗:", error);
     }
   }, [supabase]);
 
-  const fetchSupportCount = useCallback(async () => {
-    const { count } = await supabase
-      .from("support_count")
-      .select("*", { count: "exact" });
-
-    if (count !== null) {
-      setTotalSupport(count);
-    }
-  }, [supabase]);
-
-  useEffect(() => {
-    fetchSupportCount();
-    fetchMessages();
-  }, [fetchMessages, fetchSupportCount]);
-
-  function MapClickHandler() {
-    useMapEvents({
-      click(e) {
-        setClickedCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
-      },
-    });
-    return null;
-  }
+  const handleMapClick = useCallback(
+    (e: { latlng: { lat: number; lng: number } }) => {
+      setClickedCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
+    },
+    []
+  );
 
   const handleSubmit = useCallback(
     async (newMessage: {
@@ -131,15 +113,44 @@ export default function MapContent() {
       display_name?: string;
     }) => {
       const { error } = await supabase.from("messages").insert(newMessage);
+
       if (error) {
-        console.error("送出留言失敗(Fail to send message, try later):", error);
+        console.error("送出留言失敗:", error);
         return;
       }
+
       setClickedCoords(null);
       fetchMessages();
     },
     [supabase, fetchMessages]
   );
+
+  const handleCancel = useCallback(() => {
+    setClickedCoords(null);
+  }, []);
+
+  // Initialize geolocation and fetch data
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        handleGeolocationSuccess,
+        handleGeolocationError,
+        { timeout: 10000, enableHighAccuracy: true }
+      );
+    } else {
+      setErrorMessage("您的瀏覽器不支援地理位置功能，請使用支援的瀏覽器。");
+      setIsLoading(false);
+    }
+
+    fetchMessages();
+  }, [handleGeolocationSuccess, handleGeolocationError, fetchMessages]);
+
+  const MapClickHandler = useCallback(() => {
+    useMapEvents({
+      click: handleMapClick,
+    });
+    return null;
+  }, [handleMapClick]);
 
   return (
     <div className="relative w-full h-[80vh] rounded-lg overflow-hidden">
