@@ -125,10 +125,6 @@ export default function MapContent() {
     [supabase, fetchMessages]
   );
 
-  const handleCancel = useCallback(() => {
-    setClickedCoords(null);
-  }, []);
-
   // Initialize geolocation and fetch data
   useEffect(() => {
     if ("geolocation" in navigator) {
@@ -145,12 +141,12 @@ export default function MapContent() {
     fetchMessages();
   }, [handleGeolocationSuccess, handleGeolocationError, fetchMessages]);
 
-  const MapClickHandler = useCallback(() => {
+  const MapClickHandler = () => {
     useMapEvents({
       click: handleMapClick,
     });
     return null;
-  }, [handleMapClick]);
+  };
 
   return (
     <div className="relative w-full h-[80vh] rounded-lg overflow-hidden">
