@@ -1,8 +1,6 @@
 "use client";
 
-import { v4 as uuidv4 } from "uuid"; // 需要安裝: npm install uuid
-
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -16,6 +14,10 @@ import { createClient } from "@/utils/supabase/client";
 import MessageForm from "./MessageForm";
 import Link from "next/link";
 
+interface IconDefault extends L.Icon.Default {
+  _getIconUrl?: string;
+}
+
 interface Message {
   id: string;
   lat: number;
@@ -25,7 +27,7 @@ interface Message {
   created_at: string;
 }
 
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+delete (L.Icon.Default.prototype as IconDefault)._getIconUrl;
 
 const emojiIcon = L.divIcon({
   html: "👑",
@@ -36,9 +38,6 @@ const emojiIcon = L.divIcon({
 });
 
 export default function MapContent() {
-  const [sessionId, setSessionId] = useState<string>("");
-  const [clickCount, setClickCount] = useState(0);
-  const [isLiked, setIsLiked] = useState(false);
   const [center, setCenter] = useState<[number, number]>([20, 0]);
   const [isLoading, setIsLoading] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -49,7 +48,6 @@ export default function MapContent() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [totalSupport, setTotalSupport] = useState(0);
   const supabase = createClient();
-  const MAX_CLICKS = 10;
 
   useEffect(() => {
     if ("geolocation" in navigator) {
@@ -88,7 +86,7 @@ export default function MapContent() {
     }
   }, []);
 
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     const { data, error } = await supabase
       .from("messages")
       .select("*")
@@ -99,9 +97,9 @@ export default function MapContent() {
     } else {
       console.error("讀取留言失敗:", error);
     }
-  };
+  }, [supabase]);
 
-  const fetchSupportCount = async () => {
+  const fetchSupportCount = useCallback(async () => {
     const { count } = await supabase
       .from("support_count")
       .select("*", { count: "exact" });
@@ -109,12 +107,12 @@ export default function MapContent() {
     if (count !== null) {
       setTotalSupport(count);
     }
-  };
+  }, [supabase]);
 
   useEffect(() => {
     fetchSupportCount();
     fetchMessages();
-  }, []);
+  }, [fetchMessages, fetchSupportCount]);
 
   function MapClickHandler() {
     useMapEvents({
@@ -125,20 +123,23 @@ export default function MapContent() {
     return null;
   }
 
-  const handleSubmit = async (newMessage: {
-    lat: number;
-    lng: number;
-    message: string;
-    display_name?: string;
-  }) => {
-    const { error } = await supabase.from("messages").insert(newMessage);
-    if (error) {
-      console.error("送出留言失敗(Fail to send message, try later):", error);
-      return;
-    }
-    setClickedCoords(null);
-    fetchMessages();
-  };
+  const handleSubmit = useCallback(
+    async (newMessage: {
+      lat: number;
+      lng: number;
+      message: string;
+      display_name?: string;
+    }) => {
+      const { error } = await supabase.from("messages").insert(newMessage);
+      if (error) {
+        console.error("送出留言失敗(Fail to send message, try later):", error);
+        return;
+      }
+      setClickedCoords(null);
+      fetchMessages();
+    },
+    [supabase, fetchMessages]
+  );
 
   return (
     <div className="relative w-full h-[80vh] rounded-lg overflow-hidden">
