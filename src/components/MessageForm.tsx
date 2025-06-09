@@ -31,7 +31,7 @@ export default function MessageForm({
   };
 
   return (
-    <div className="absolute top-4 right-4 z-[999] bg-white/90 p-4 shadow-xl rounded w-[400px] border-2">
+    <div className="absolute top-4 right-0 z-[999] bg-white/90 p-4 shadow-xl rounded w-fit border-2">
       <h2 className="text-lg font-semibold mb-2">
         為 ITZY 留言 | Cheer for ITZY
       </h2>

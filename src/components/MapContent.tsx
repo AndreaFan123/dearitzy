@@ -1,5 +1,7 @@
 "use client";
 
+import { v4 as uuidv4 } from "uuid"; // 需要安裝: npm install uuid
+
 import { useEffect, useState } from "react";
 import {
   MapContainer,
@@ -12,6 +14,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { createClient } from "@/utils/supabase/client";
 import MessageForm from "./MessageForm";
+import Link from "next/link";
 
 interface Message {
   id: string;
@@ -33,6 +36,9 @@ const emojiIcon = L.divIcon({
 });
 
 export default function MapContent() {
+  const [sessionId, setSessionId] = useState<string>("");
+  const [clickCount, setClickCount] = useState(0);
+  const [isLiked, setIsLiked] = useState(false);
   const [center, setCenter] = useState<[number, number]>([20, 0]);
   const [isLoading, setIsLoading] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -41,7 +47,9 @@ export default function MapContent() {
     lng: number;
   } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [totalSupport, setTotalSupport] = useState(0);
   const supabase = createClient();
+  const MAX_CLICKS = 10;
 
   useEffect(() => {
     if ("geolocation" in navigator) {
@@ -85,11 +93,26 @@ export default function MapContent() {
       .from("messages")
       .select("*")
       .order("created_at", { ascending: false });
-    if (data) setMessages(data);
-    else console.error("讀取留言失敗:", error);
+    if (data) {
+      setMessages(data);
+      setTotalSupport(data.length);
+    } else {
+      console.error("讀取留言失敗:", error);
+    }
+  };
+
+  const fetchSupportCount = async () => {
+    const { count } = await supabase
+      .from("support_count")
+      .select("*", { count: "exact" });
+
+    if (count !== null) {
+      setTotalSupport(count);
+    }
   };
 
   useEffect(() => {
+    fetchSupportCount();
     fetchMessages();
   }, []);
 
@@ -119,6 +142,22 @@ export default function MapContent() {
 
   return (
     <div className="relative w-full h-[80vh] rounded-lg overflow-hidden">
+      <div className="absolute bottom-20 left-4 bg-white px-4 py-2 rounded-full shadow-lg z-[1000] flex items-center gap-2">
+        <span className=" text-gray-600 font-semibold">❤️ From</span>
+        <span className="font-semibold text-red-600">{totalSupport}</span>
+        <span className=" text-gray-600 font-semibold">Mdizies</span>
+      </div>
+      <div className="absolute bottom-4 left-4 bg-white px-4 py-2 rounded-full shadow-lg z-[1000] flex items-center gap-2">
+        <span className=" text-gray-600">Created by</span>
+        <Link
+          target="_blank"
+          href="https://github.com/AndreaFan123/dearitzy"
+          className=" text-pink-600 font-semibold underline"
+        >
+          A.F(Give me a star on GitHub!)
+        </Link>
+      </div>
+
       {isLoading ? (
         <div className="h-full w-full flex items-center justify-center">
           <p>讀取位置中(Check location...)</p>
